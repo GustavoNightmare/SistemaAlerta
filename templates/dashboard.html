@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Detección de sonido + GPS</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 1rem;
+        }
+
+        .card {
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .alert-ok {
+            color: #0a0;
+        }
+
+        .alert-danger {
+            color: #c00;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Panel de detección de sonido + GPS</h1>
+
+    <div class="card">
+        <h2>Estado de audio</h2>
+        <p>Etiqueta actual: <strong id="label">-</strong></p>
+        <p>Confianza: <strong id="conf">-</strong></p>
+        <p>Alerta: <strong id="alert-text" class="alert-ok">Sin alerta</strong></p>
+    </div>
+
+    <div class="card">
+        <h2>Último GPS recibido</h2>
+        <p>Latitud: <strong id="gps-lat">-</strong></p>
+        <p>Longitud: <strong id="gps-lng">-</strong></p>
+        <button onclick="window.open('/gps', '_blank')">
+            Abrir mapa
+        </button>
+    </div>
+
+    <script>
+        let lastAlertState = false;
+
+        async function pollStatus() {
+            try {
+                const resp = await fetch('/status');
+                if (!resp.ok) return;
+                const data = await resp.json();
+
+                // Actualizar textos de audio
+                document.getElementById('label').textContent = data.label ?? '-';
+                document.getElementById('conf').textContent =
+                    data.conf !== null && data.conf !== undefined
+                        ? Number(data.conf).toFixed(3)
+                        : '-';
+
+                // Texto de alerta
+                const alertElem = document.getElementById('alert-text');
+                if (data.is_alert) {
+                    alertElem.textContent = 'ALERTA DE PELIGRO';
+                    alertElem.className = 'alert-danger';
+                } else {
+                    alertElem.textContent = 'Sin alerta';
+                    alertElem.className = 'alert-ok';
+                }
+
+                // Mostrar parte del GPS en el panel
+                if (data.gps) {
+                    if (data.gps.lat !== undefined) {
+                        document.getElementById('gps-lat').textContent = data.gps.lat;
+                    }
+                    if (data.gps.lng !== undefined) {
+                        document.getElementById('gps-lng').textContent = data.gps.lng;
+                    }
+                }
+
+                // Si hay alerta y antes no la había, mostramos popup y abrimos mapa
+                if (data.is_alert && !lastAlertState) {
+                    const tipo = (data.label || 'desconocido').toUpperCase();
+                    alert('⚠️ ALERTA DE PELIGRO: ' + tipo);
+                    // Abrir mapa en una nueva pestaña
+                    window.open('/gps', '_blank');
+                }
+
+                lastAlertState = data.is_alert;
+
+            } catch (err) {
+                console.error('Error al pedir /status:', err);
+            }
+        }
+
+        // Consultar estado cada segundo
+        setInterval(pollStatus, 1000);
+    </script>
+</body>
+
+</html>
