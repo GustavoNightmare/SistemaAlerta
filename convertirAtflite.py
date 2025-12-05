@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 # Carga el modelo Keras que ya entrenaste
-model = tf.keras.models.load_model("modelo_sonidos2segundos.h5")
+model = tf.keras.models.load_model("modelo_sonidos.h5")
 
 # Crea el convertidor
 converter = tf.lite.TFLiteConverter.from_keras_model(model)

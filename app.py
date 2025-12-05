@@ -17,13 +17,11 @@ SAMPLE_RATE = 16000     # Hz, igual que en el entrenamiento
 DURATION = 4.0          # segundos por ventana
 N_MELS = 64
 
-MODEL_PATH = "modelo_sonidos4segundos.tflite"
+MODEL_PATH = "modelo_sonidos.tflite"
 LABELS_PATH = "label_names.npy"
 
-# Etiquetas especiales
-ALERT_LABELS = ["disparo", "grito"]  # ajusta a los nombres reales
-NOISE_LABEL = "ruido"                # ajusta al nombre real de ruido
-ALERT_THRESHOLD = 0.80
+ALERT_THRESHOLD = 0.80  # umbral de probabilidad para marcar emergencia
+
 
 # =========================
 # CARGAR MODELO TFLITE
@@ -35,13 +33,23 @@ interpreter.allocate_tensors()
 input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
 
-# Cargar nombres de clases
+# Cargar nombres de clases: ['ruido', 'emergencia']
 label_names = np.load(LABELS_PATH, allow_pickle=True)
+label_names = [str(x) for x in label_names]
+
+# Asumimos el orden que usamos en el entrenamiento binario:
+# LABEL_NAMES = ["ruido", "emergencia"]
+NOISE_LABEL = label_names[0]
+EMERG_LABEL = label_names[1]
+
+print("Clases cargadas:", label_names)
+print("NOISE_LABEL:", NOISE_LABEL)
+print("EMERG_LABEL:", EMERG_LABEL)
+
 
 # =========================
 # PREPROCESAMIENTO
 # =========================
-
 
 def waveform_to_melspec(y, sr=SAMPLE_RATE):
     """
@@ -79,17 +87,18 @@ def waveform_to_melspec(y, sr=SAMPLE_RATE):
 def predict_from_waveform(y):
     """
     Usa el modelo TFLite para predecir a partir de la señal de audio cruda.
-    Aplica lógica de tolerancia:
-      - Solo considera 'disparo' o 'grito' si conf >= ALERT_THRESHOLD
-      - Si no, lo degrada a 'ruido'.
+    Devuelve:
+      - label: clase ganadora ('ruido' o 'emergencia')
+      - conf: probabilidad de la clase ganadora
+      - probs: dict {clase: probabilidad}
     """
     spec = waveform_to_melspec(y)                # (n_mels, time, 1)
     input_data = np.expand_dims(spec, axis=0)    # (1, n_mels, time, 1)
 
     # Asegurar que el tamaño coincide con el esperado por el modelo
-    expected_shape = input_details[0]['shape']   # p.ej. [1, 64, 122, 1]
+    expected_shape = tuple(input_details[0]['shape'])  # p.ej. (1, 64, 122, 1)
 
-    if input_data.shape != tuple(expected_shape):
+    if input_data.shape != expected_shape:
         _, n_mels_e, time_e, ch_e = expected_shape
         spec_resized = spec
 
@@ -109,29 +118,16 @@ def predict_from_waveform(y):
     # Inferencia TFLite
     interpreter.set_tensor(input_details[0]['index'], input_data)
     interpreter.invoke()
-    output_data = interpreter.get_tensor(output_details[0]['index'])[0]
+    output_data = interpreter.get_tensor(
+        output_details[0]['index'])[0]  # shape (2,)
 
     # Probabilidades por clase
-    probs = {str(label_names[i]): float(p) for i, p in enumerate(output_data)}
+    probs = {label_names[i]: float(p) for i, p in enumerate(output_data)}
 
-    # Clase ganadora "cruda"
+    # Clase ganadora
     idx = int(np.argmax(output_data))
-    raw_label = str(label_names[idx])
-    raw_conf = float(output_data[idx])
-
-    # Post-procesado
-    label = raw_label
-    conf = raw_conf
-
-    # Si la clase ganadora es disparo o grito pero con poca confianza,
-    # la degradamos a ruido.
-    if raw_label in ALERT_LABELS and raw_conf < ALERT_THRESHOLD:
-        if NOISE_LABEL in probs:
-            label = NOISE_LABEL
-            conf = probs[NOISE_LABEL]
-        else:
-            label = NOISE_LABEL
-            conf = 1.0 - raw_conf
+    label = label_names[idx]
+    conf = float(output_data[idx])
 
     return label, conf, probs
 
@@ -152,7 +148,6 @@ last_gps_data = {}
 # =========================
 # CAPTURA DE AUDIO EN HILO
 # =========================
-
 
 def audio_loop():
     global current_result
@@ -226,12 +221,15 @@ def status():
     """
     data = dict(current_result)  # copia
 
-    label = data.get("label")
-    conf = float(data.get("conf") or 0.0)
+    probs = data.get("probs") or {}
+    emerg_prob = float(probs.get(EMERG_LABEL, 0.0))
 
-    # ¿Es disparo o grito con confianza suficiente?
-    is_alert = label in ALERT_LABELS and conf >= ALERT_THRESHOLD
+    # alerta si la probabilidad de 'emergencia' >= umbral
+    is_alert = emerg_prob >= ALERT_THRESHOLD
+
     data["is_alert"] = is_alert
+    data["emerg_prob"] = emerg_prob
+    data["noise_prob"] = float(probs.get(NOISE_LABEL, 0.0))
 
     # Añadimos último GPS
     data["gps"] = last_gps_data

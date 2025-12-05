@@ -1,106 +1,592 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 
 <head>
-    <meta charset="UTF-8">
-    <title>Detección de sonido + GPS</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8" />
+    <title>Panel de detección de sonido + GPS</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
+        :root {
+            --bg: #0f172a;
+            --bg-card: #111827;
+            --bg-soft: #020617;
+            --accent: #6366f1;
+            --accent-soft: rgba(99, 102, 241, 0.15);
+            --danger: #ef4444;
+            --danger-soft: rgba(239, 68, 68, 0.15);
+            --ok: #22c55e;
+            --text-main: #e5e7eb;
+            --text-muted: #9ca3af;
+            --border: #1f2937;
+            --shadow-soft: 0 18px 40px rgba(15, 23, 42, 0.8);
+            --radius-lg: 18px;
+            --radius-pill: 999px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
         body {
-            font-family: Arial, sans-serif;
-            margin: 1rem;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: radial-gradient(circle at top, #1f2933, #020617);
+            color: var(--text-main);
+            min-height: 100vh;
+        }
+
+        .page-wrapper {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 24px 16px 40px;
+        }
+
+        header {
+            margin-bottom: 24px;
+        }
+
+        .title-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        h1 {
+            font-size: 1.6rem;
+            font-weight: 700;
+        }
+
+        .tag {
+            padding: 6px 12px;
+            border-radius: var(--radius-pill);
+            border: 1px solid var(--border);
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            background: rgba(15, 23, 42, 0.8);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 2fr 1.3fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .grid-bottom {
+            display: grid;
+            grid-template-columns: 1.6fr 1.4fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 900px) {
+
+            .grid,
+            .grid-bottom {
+                grid-template-columns: 1fr;
+            }
         }
 
         .card {
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            padding: 1rem;
-            margin-bottom: 1rem;
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.97), rgba(15, 23, 42, 0.9));
+            border-radius: var(--radius-lg);
+            padding: 18px 20px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-soft);
         }
 
-        .alert-ok {
-            color: #0a0;
+        .card h2 {
+            font-size: 1rem;
+            margin-bottom: 14px;
         }
 
-        .alert-danger {
-            color: #c00;
-            font-weight: bold;
+        .card-subtitle {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        .audio-main-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .label-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            border-radius: var(--radius-pill);
+            border: 1px solid var(--border);
+            font-size: 0.78rem;
+            background: rgba(15, 23, 42, 0.9);
+        }
+
+        .label-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+        }
+
+        .label-text {
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        .label-value {
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .confidence-block {
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+        }
+
+        .confidence-number {
+            font-weight: 600;
+        }
+
+        .bar-wrapper {
+            margin-top: 6px;
+            height: 6px;
+            border-radius: 999px;
+            background: #111827;
+            overflow: hidden;
+        }
+
+        .bar-inner {
+            height: 100%;
+            background: linear-gradient(90deg, #22c55e, #eab308, #ef4444);
+            width: 0%;
+            transition: width 0.25s ease-out;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: var(--radius-pill);
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .status-pill svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .status-pill--ok {
+            background: rgba(22, 163, 74, 0.08);
+            color: var(--ok);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .status-pill--alert {
+            background: var(--danger-soft);
+            color: var(--danger);
+            border: 1px solid rgba(239, 68, 68, 0.6);
+        }
+
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 12px;
+        }
+
+        .status-caption {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+        }
+
+        .gps-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .coords {
+            font-size: 0.9rem;
+        }
+
+        .coords span {
+            display: block;
+            color: var(--text-muted);
+        }
+
+        .coords strong {
+            color: var(--text-main);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: var(--radius-pill);
+            border: none;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.08s ease-out, box-shadow 0.08s ease-out, background 0.1s;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+            box-shadow: 0 10px 24px rgba(99, 102, 241, 0.45);
+        }
+
+        .btn-primary:hover {
+            background: #4f46e5;
+            transform: translateY(-1px);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+            box-shadow: none;
+        }
+
+        .btn-ghost {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+        }
+
+        .btn-ghost:hover {
+            background: rgba(15, 23, 42, 0.9);
+            color: var(--text-main);
+        }
+
+        .alert-list {
+            list-style: none;
+            margin-top: 10px;
+            max-height: 260px;
+            overflow-y: auto;
+        }
+
+        .alert-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 10px;
+            border-radius: 12px;
+            margin-bottom: 8px;
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+        }
+
+        .alert-main {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .alert-title {
+            font-size: 0.88rem;
+            font-weight: 600;
+        }
+
+        .alert-meta {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            font-size: 0.7rem;
+            border-radius: var(--radius-pill);
+            background: var(--danger-soft);
+            color: var(--danger);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+
+        .badge-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--danger);
+        }
+
+        .muted {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        .pill-small {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 7px;
+            border-radius: var(--radius-pill);
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid var(--border);
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .pill-small span {
+            font-weight: 600;
+            color: var(--text-main);
         }
     </style>
 </head>
 
 <body>
-    <h1>Panel de detección de sonido + GPS</h1>
+    <div class="page-wrapper">
+        <header>
+            <div class="title-row">
+                <h1>Panel de detección de sonido + GPS</h1>
+                <div class="tag">Monitoreo local en tiempo real</div>
+            </div>
+        </header>
 
-    <div class="card">
-        <h2>Estado de audio</h2>
-        <p>Etiqueta actual: <strong id="label">-</strong></p>
-        <p>Confianza: <strong id="conf">-</strong></p>
-        <p>Alerta: <strong id="alert-text" class="alert-ok">Sin alerta</strong></p>
-    </div>
+        <section class="grid">
+            <!-- Estado de audio -->
+            <article class="card">
+                <h2>Estado de audio</h2>
+                <p class="card-subtitle">Clasificación en ventanas de <strong>4 s</strong> usando el modelo binario
+                    ruido / emergencia.</p>
 
-    <div class="card">
-        <h2>Último GPS recibido</h2>
-        <p>Latitud: <strong id="gps-lat">-</strong></p>
-        <p>Longitud: <strong id="gps-lng">-</strong></p>
-        <button onclick="window.open('/gps', '_blank')">
-            Abrir mapa
-        </button>
+                <div class="audio-main-row">
+                    <div>
+                        <div class="label-pill">
+                            <div class="label-dot"></div>
+                            <span class="label-text">Etiqueta actual</span>
+                            <span class="label-value" id="label-text">-</span>
+                        </div>
+                    </div>
+                    <div class="pill-small">
+                        P(emergencia): <span id="emerg-prob-pill">0.000</span>
+                    </div>
+                </div>
+
+                <div class="confidence-block">
+                    <div>Confianza etiqueta actual: <span id="conf-value" class="confidence-number">0.000</span></div>
+                    <div class="bar-wrapper">
+                        <div id="conf-bar" class="bar-inner"></div>
+                    </div>
+                </div>
+
+                <div class="status-row">
+                    <div>
+                        <div class="status-caption">Estado de alerta</div>
+                        <div id="alert-pill" class="status-pill status-pill--ok">
+                            <!-- icon -->
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+                                    stroke-linejoin="round" />
+                            </svg>
+                            <span id="alert-text">Sin alerta</span>
+                        </div>
+                    </div>
+                    <div class="muted">
+                        Actualizado: <span id="last-update">--:--:--</span>
+                    </div>
+                </div>
+            </article>
+
+            <!-- Último GPS -->
+            <article class="card">
+                <h2>Último GPS recibido</h2>
+                <p class="card-subtitle">Datos enviados por el dispositivo remoto.</p>
+
+                <div class="gps-row">
+                    <div class="coords">
+                        <span>Latitud: <strong id="gps-lat">-</strong></span>
+                        <span>Longitud: <strong id="gps-lon">-</strong></span>
+                    </div>
+                    <button class="btn btn-primary" onclick="openMap()">
+                        Ver mapa
+                    </button>
+                </div>
+
+                <p class="muted" style="margin-top: 10px;">
+                    El mapa se abre en una nueva pestaña con el último punto recibido.
+                </p>
+            </article>
+        </section>
+
+        <section class="grid-bottom">
+            <!-- Historial de alertas -->
+            <article class="card">
+                <h2>Historial de alertas de emergencia</h2>
+                <p class="card-subtitle">Se registra cada vez que se detecta una emergencia con probabilidad superior al
+                    umbral.</p>
+
+                <ul id="alert-list" class="alert-list">
+                    <li class="muted">Aún no hay alertas en esta sesión.</li>
+                </ul>
+            </article>
+
+            <!-- Info adicional -->
+            <article class="card">
+                <h2>Detalle de probabilidades</h2>
+                <p class="card-subtitle">Probabilidades actuales entregadas por el modelo.</p>
+
+                <div style="margin-top: 10px; font-size: 0.9rem;">
+                    <div>Probabilidad de <strong>ruido</strong>: <span id="noise-prob">0.000</span></div>
+                    <div>Probabilidad de <strong>emergencia</strong>: <span id="emerg-prob">0.000</span></div>
+                </div>
+
+                <p class="muted" style="margin-top: 10px;">
+                    El umbral de alerta está configurado en
+                    <strong id="threshold-text">0.80</strong>.
+                    Puedes cambiarlo en <code>ALERT_THRESHOLD</code> dentro de <code>app.py</code>.
+                </p>
+            </article>
+        </section>
     </div>
 
     <script>
-        let lastAlertState = false;
+        const ALERT_THRESHOLD = 0.80; // mantén sincronizado con app.py
 
-        async function pollStatus() {
+        let prevIsAlert = false;
+
+        function openMap() {
+            window.open('/gps', '_blank');
+        }
+
+        function fmtProb(x) {
+            return Number(x || 0).toFixed(3);
+        }
+
+        function updateAlertHistory(data) {
+            const list = document.getElementById('alert-list');
+            const isAlert = !!data.is_alert;
+            if (!isAlert) return;
+
+            // Si antes no había alerta y ahora sí -> registramos una nueva
+            if (!prevIsAlert) {
+                // limpiar mensaje "sin alertas" si existe
+                if (list.children.length === 1 && list.children[0].classList.contains('muted')) {
+                    list.removeChild(list.children[0]);
+                }
+
+                const li = document.createElement('li');
+                li.className = 'alert-item';
+
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString();
+
+                const gps = data.gps || {};
+                const lat = gps.lat ?? gps.latitude ?? gps.Latitude ?? null;
+                const lon = gps.lon ?? gps.lng ?? gps.longitude ?? gps.Longitude ?? null;
+
+                let coordText = 'Sin coordenadas';
+                if (lat != null && lon != null) {
+                    coordText = `Lat: ${lat}, Lon: ${lon}`;
+                }
+
+                li.innerHTML = `
+        <div class="alert-main">
+          <span class="badge">
+            <span class="badge-dot"></span>
+            EMERGENCIA
+          </span>
+          <div class="alert-title">Alerta detectada</div>
+          <div class="alert-meta">
+            Hora: <strong>${timeStr}</strong> · ${coordText}
+          </div>
+        </div>
+        <button class="btn btn-ghost" onclick="openMap()">
+          Ver mapa
+        </button>
+      `;
+
+                // añadimos arriba del todo
+                list.prepend(li);
+            }
+
+            prevIsAlert = true;
+        }
+
+        async function fetchStatus() {
             try {
-                const resp = await fetch('/status');
-                if (!resp.ok) return;
-                const data = await resp.json();
+                const res = await fetch('/status');
+                const data = await res.json();
 
-                // Actualizar textos de audio
-                document.getElementById('label').textContent = data.label ?? '-';
-                document.getElementById('conf').textContent =
-                    data.conf !== null && data.conf !== undefined
-                        ? Number(data.conf).toFixed(3)
-                        : '-';
+                const label = data.label || '-';
+                const conf = Number(data.conf || 0);
+                const probs = data.probs || {};
+                const isAlert = !!data.is_alert;
 
-                // Texto de alerta
-                const alertElem = document.getElementById('alert-text');
-                if (data.is_alert) {
-                    alertElem.textContent = 'ALERTA DE PELIGRO';
-                    alertElem.className = 'alert-danger';
+                // Actualizar etiqueta
+                document.getElementById('label-text').textContent = label;
+
+                // Confianza de etiqueta actual
+                document.getElementById('conf-value').textContent = fmtProb(conf);
+                const bar = document.getElementById('conf-bar');
+                bar.style.width = (conf * 100).toFixed(1) + '%';
+
+                // Probabilidades ruido/emergencia
+                const noiseProb = Number(data.noise_prob || probs["ruido"] || 0);
+                const emergProb = Number(data.emerg_prob || probs["emergencia"] || 0);
+
+                document.getElementById('noise-prob').textContent = fmtProb(noiseProb);
+                document.getElementById('emerg-prob').textContent = fmtProb(emergProb);
+                document.getElementById('emerg-prob-pill').textContent = fmtProb(emergProb);
+
+                // Estado de alerta
+                const pill = document.getElementById('alert-pill');
+                const text = document.getElementById('alert-text');
+
+                pill.classList.remove('status-pill--ok', 'status-pill--alert');
+
+                if (isAlert) {
+                    pill.classList.add('status-pill--alert');
+                    text.textContent = 'ALERTA DE EMERGENCIA';
                 } else {
-                    alertElem.textContent = 'Sin alerta';
-                    alertElem.className = 'alert-ok';
+                    pill.classList.add('status-pill--ok');
+                    text.textContent = 'Sin alerta';
                 }
 
-                // Mostrar parte del GPS en el panel
-                if (data.gps) {
-                    if (data.gps.lat !== undefined) {
-                        document.getElementById('gps-lat').textContent = data.gps.lat;
-                    }
-                    if (data.gps.lng !== undefined) {
-                        document.getElementById('gps-lng').textContent = data.gps.lng;
-                    }
-                }
+                // Última actualización
+                const now = new Date();
+                document.getElementById('last-update').textContent = now.toLocaleTimeString();
+                document.getElementById('threshold-text').textContent = ALERT_THRESHOLD.toFixed(2);
 
-                // Si hay alerta y antes no la había, mostramos popup y abrimos mapa
-                if (data.is_alert && !lastAlertState) {
-                    const tipo = (data.label || 'desconocido').toUpperCase();
-                    alert('⚠️ ALERTA DE PELIGRO: ' + tipo);
-                    // Abrir mapa en una nueva pestaña
-                    window.open('/gps', '_blank');
-                }
+                // GPS en panel
+                const gps = data.gps || {};
+                const lat = gps.lat ?? gps.latitude ?? gps.Latitude ?? '-';
+                const lon = gps.lon ?? gps.lng ?? gps.longitude ?? gps.Longitude ?? '-';
 
-                lastAlertState = data.is_alert;
+                document.getElementById('gps-lat').textContent = lat;
+                document.getElementById('gps-lon').textContent = lon;
+
+                // Historial de alertas
+                if (isAlert) {
+                    updateAlertHistory(data);
+                } else {
+                    prevIsAlert = false;
+                }
 
             } catch (err) {
-                console.error('Error al pedir /status:', err);
+                console.error('Error obteniendo /status:', err);
             }
         }
 
-        // Consultar estado cada segundo
-        setInterval(pollStatus, 1000);
+        // Primera carga + refresco periódico
+        fetchStatus();
+        setInterval(fetchStatus, 2000);
     </script>
 </body>
 
