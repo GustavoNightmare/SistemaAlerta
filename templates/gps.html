@@ -3,9 +3,9 @@
 
 <head>
     <meta charset="utf-8" />
-    <title>Mapa GPS - Sistema de alerta</title>
+    <title>Ubicación GPS</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <!-- Leaflet CSS -->
+
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <style>
@@ -16,21 +16,21 @@
             color: #e5e7eb;
         }
 
-        .wrapper {
-            max-width: 960px;
+        .page-wrapper {
+            max-width: 1100px;
             margin: 0 auto;
-            padding: 16px;
+            padding: 20px 16px 32px;
         }
 
         h1 {
-            font-size: 1.4rem;
-            margin-bottom: 10px;
+            font-size: 1.6rem;
+            margin-bottom: 6px;
         }
 
-        .muted {
+        .subtitle {
             font-size: 0.85rem;
             color: #9ca3af;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
         }
 
         #map {
@@ -39,91 +39,135 @@
             border-radius: 16px;
             overflow: hidden;
             box-shadow: 0 18px 40px rgba(15, 23, 42, 0.8);
-            border: 1px solid #1f2937;
         }
 
-        .coords {
+        .info-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
             margin-top: 10px;
             font-size: 0.9rem;
-        }
-
-        .coords span {
-            display: block;
             color: #9ca3af;
         }
 
-        .coords strong {
+        .info-row strong {
             color: #e5e7eb;
+        }
+
+        #audio-container {
+            margin-top: 18px;
+            padding: 14px 16px;
+            border-radius: 14px;
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid #1f2937;
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.7);
+        }
+
+        #audio-container h2 {
+            font-size: 1rem;
+            margin-bottom: 6px;
+        }
+
+        audio {
+            width: 100%;
+            margin-top: 6px;
         }
     </style>
 </head>
 
 <body>
-    <div class="wrapper">
+    <div class="page-wrapper">
         <h1>Ubicación GPS</h1>
-        <p class="muted">Mostrando el último punto GPS recibido por el servidor.</p>
+        <div id="mode-text" class="subtitle">
+            Mostrando el último punto GPS recibido por el servidor.
+        </div>
 
         <div id="map"></div>
 
-        <div class="coords">
-            <span>Latitud: <strong id="lat-text">-</strong></span>
-            <span>Longitud: <strong id="lon-text">-</strong></span>
+        <div class="info-row">
+            <div>Latitud: <strong id="lat-text">-</strong></div>
+            <div>Longitud: <strong id="lon-text">-</strong></div>
+            <div>Actualizado: <strong id="ts-text">--:--:--</strong></div>
+        </div>
+
+        <div id="audio-container" style="display:none;">
+            <h2>Audio asociado a la alerta</h2>
+            <div class="subtitle">Fragmento de ~4 segundos que activó la detección.</div>
+            <audio id="alert-audio" controls>
+                Tu navegador no soporta audio HTML5.
+            </audio>
         </div>
     </div>
 
-    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="">
+        </script>
     <script>
-        let map, marker;
+        const params = new URLSearchParams(window.location.search);
+        const alertId = params.get('audio');
+        const latParam = parseFloat(params.get('lat'));
+        const lonParam = parseFloat(params.get('lon'));
 
-        function resolveLatLon(data) {
-            const gps = data || {};
-            const lat = gps.lat ?? gps.latitude ?? gps.Latitude ?? null;
-            const lon = gps.lon ?? gps.lng ?? gps.longitude ?? gps.Longitude ?? null;
-            return { lat, lon };
+        const hasManualCoords = !Number.isNaN(latParam) && !Number.isNaN(lonParam);
+
+        const map = L.map('map').setView([2.46, -76.54], 14);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        let marker = null;
+
+        function setMarker(lat, lon) {
+            if (marker) {
+                marker.setLatLng([lat, lon]);
+            } else {
+                marker = L.marker([lat, lon]).addTo(map).bindPopup("Último GPS recibido");
+            }
+            map.setView([lat, lon], 15);
+            document.getElementById('lat-text').textContent = lat;
+            document.getElementById('lon-text').textContent = lon;
+            document.getElementById('ts-text').textContent = new Date().toLocaleTimeString();
         }
 
-        async function loadGps() {
+        async function fetchGps() {
             try {
                 const res = await fetch('/gps/json');
-                const data = await res.json();
+                const gps = await res.json();
+                const lat = gps.lat ?? gps.latitude ?? gps.Latitude;
+                const lon = gps.lon ?? gps.lng ?? gps.longitude ?? gps.Longitude;
 
-                const { lat, lon } = resolveLatLon(data);
-
-                if (lat == null || lon == null) {
-                    console.warn('Sin coordenadas GPS válidas aún.');
-                    return;
+                if (lat != null && lon != null) {
+                    setMarker(parseFloat(lat), parseFloat(lon));
                 }
-
-                document.getElementById('lat-text').textContent = lat;
-                document.getElementById('lon-text').textContent = lon;
-
-                const latNum = Number(lat);
-                const lonNum = Number(lon);
-
-                if (!map) {
-                    map = L.map('map').setView([latNum, lonNum], 16);
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                        maxZoom: 19,
-                        attribution: '&copy; OpenStreetMap contributors'
-                    }).addTo(map);
-
-                    marker = L.marker([latNum, lonNum]).addTo(map)
-                        .bindPopup('Último GPS recibido').openPopup();
-                } else {
-                    map.setView([latNum, lonNum], map.getZoom());
-                    marker.setLatLng([latNum, lonNum]);
-                }
-
             } catch (err) {
                 console.error('Error obteniendo /gps/json:', err);
             }
         }
 
-        loadGps();
-        // refresco cada 10s por si el dispositivo se mueve
-        setInterval(loadGps, 10000);
+        // ----- Modo alerta (coords + audio fijados) -----
+        if (hasManualCoords) {
+            document.getElementById('mode-text').textContent =
+                alertId
+                    ? `Mostrando la ubicación guardada para la alerta #${alertId}.`
+                    : 'Mostrando ubicación guardada.';
+
+            setMarker(latParam, lonParam);
+        } else {
+            // ----- Modo en vivo -----
+            document.getElementById('mode-text').textContent =
+                'Mostrando el último punto GPS recibido por el servidor (se actualiza solo).';
+            fetchGps();
+            setInterval(fetchGps, 3000);
+        }
+
+        // ----- Audio asociado a la alerta -----
+        if (alertId) {
+            const audioContainer = document.getElementById('audio-container');
+            const audioEl = document.getElementById('alert-audio');
+            audioEl.src = '/alert_audio/' + encodeURIComponent(alertId) + '.wav';
+            audioContainer.style.display = 'block';
+        }
     </script>
 </body>
 

@@ -390,7 +390,6 @@
                     <div>
                         <div class="status-caption">Estado de alerta</div>
                         <div id="alert-pill" class="status-pill status-pill--ok">
-                            <!-- icon -->
                             <svg viewBox="0 0 24 24" fill="none">
                                 <path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
                                     stroke-linejoin="round" />
@@ -449,7 +448,7 @@
 
                 <p class="muted" style="margin-top: 10px;">
                     El umbral de alerta está configurado en
-                    <strong id="threshold-text">0.80</strong>.
+                    <strong id="threshold-text">0.70</strong>.
                     Puedes cambiarlo en <code>ALERT_THRESHOLD</code> dentro de <code>app.py</code>.
                 </p>
             </article>
@@ -457,46 +456,69 @@
     </div>
 
     <script>
-        const ALERT_THRESHOLD = 0.80; // mantén sincronizado con app.py
-
-        let prevIsAlert = false;
+        const ALERT_THRESHOLD = 0.70; // igual que en app.py
+        let lastSeenAlertId = null;
 
         function openMap() {
+            // mapa "en vivo" con el último GPS
             window.open('/gps', '_blank');
+        }
+
+        function openAlertMap(alertId, lat, lon) {
+            const params = new URLSearchParams();
+            if (alertId) params.set('audio', alertId);
+            if (lat != null && lon != null && !Number.isNaN(lat) && !Number.isNaN(lon)) {
+                params.set('lat', lat);
+                params.set('lon', lon);
+            }
+            const url = '/gps' + (params.toString() ? '?' + params.toString() : '');
+            window.open(url, '_blank');
         }
 
         function fmtProb(x) {
             return Number(x || 0).toFixed(3);
         }
 
-        function updateAlertHistory(data) {
+        function updateAlertHistoryFromStatus(data) {
+            const alert = data.last_alert;
+            if (!alert || !alert.id) return;
+
+            // Evitar duplicar la misma alerta
+            if (alert.id === lastSeenAlertId) return;
+            lastSeenAlertId = alert.id;
+
             const list = document.getElementById('alert-list');
-            const isAlert = !!data.is_alert;
-            if (!isAlert) return;
+            if (!list) return;
 
-            // Si antes no había alerta y ahora sí -> registramos una nueva
-            if (!prevIsAlert) {
-                // limpiar mensaje "sin alertas" si existe
-                if (list.children.length === 1 && list.children[0].classList.contains('muted')) {
-                    list.removeChild(list.children[0]);
-                }
+            // Quitar el mensaje "sin alertas"
+            if (list.children.length === 1 && list.children[0].classList.contains('muted')) {
+                list.innerHTML = "";
+            }
 
-                const li = document.createElement('li');
-                li.className = 'alert-item';
+            const li = document.createElement('li');
+            li.className = 'alert-item';
+            li.dataset.alertId = alert.id;
+            if (alert.gps) {
+                if (alert.gps.lat !== undefined) li.dataset.lat = alert.gps.lat;
+                if (alert.gps.lng !== undefined) li.dataset.lon = alert.gps.lng;
+                if (alert.gps.lon !== undefined) li.dataset.lon = alert.gps.lon;
+            }
+            li.dataset.audioUrl = alert.audio_url || "";
 
-                const now = new Date();
-                const timeStr = now.toLocaleTimeString();
+            const timeStr = new Date(alert.ts * 1000).toLocaleTimeString();
 
-                const gps = data.gps || {};
-                const lat = gps.lat ?? gps.latitude ?? gps.Latitude ?? null;
-                const lon = gps.lon ?? gps.lng ?? gps.longitude ?? gps.Longitude ?? null;
+            const gps = alert.gps || {};
+            const lat = gps.lat ?? gps.latitude ?? gps.Latitude ?? null;
+            const lon = gps.lon ?? gps.lng ?? gps.longitude ?? gps.Longitude ?? null;
+            const coordText = (lat != null && lon != null)
+                ? `Lat: ${lat}, Lon: ${lon}`
+                : 'Sin coordenadas';
 
-                let coordText = 'Sin coordenadas';
-                if (lat != null && lon != null) {
-                    coordText = `Lat: ${lat}, Lon: ${lon}`;
-                }
+            const probStr = (alert.emerg_prob !== undefined)
+                ? ` · P(emergencia): ${fmtProb(alert.emerg_prob)}`
+                : "";
 
-                li.innerHTML = `
+            li.innerHTML = `
         <div class="alert-main">
           <span class="badge">
             <span class="badge-dot"></span>
@@ -504,20 +526,29 @@
           </span>
           <div class="alert-title">Alerta detectada</div>
           <div class="alert-meta">
-            Hora: <strong>${timeStr}</strong> · ${coordText}
+            Hora: <strong>${timeStr}</strong> · ${coordText}${probStr}
           </div>
         </div>
-        <button class="btn btn-ghost" onclick="openMap()">
-          Ver mapa
-        </button>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
+          <button class="btn btn-ghost alert-map-btn">
+            Ver mapa + audio
+          </button>
+        </div>
       `;
 
-                // añadimos arriba del todo
-                list.prepend(li);
-            }
-
-            prevIsAlert = true;
+            list.prepend(li);
         }
+
+        // Delegado para los botones "Ver mapa + audio"
+        document.getElementById('alert-list').addEventListener('click', function (e) {
+            const btn = e.target.closest('.alert-map-btn');
+            if (!btn) return;
+            const li = btn.closest('.alert-item');
+            const id = li.dataset.alertId;
+            const lat = li.dataset.lat ? parseFloat(li.dataset.lat) : null;
+            const lon = li.dataset.lon ? parseFloat(li.dataset.lon) : null;
+            openAlertMap(id, lat, lon);
+        });
 
         async function fetchStatus() {
             try {
@@ -529,10 +560,10 @@
                 const probs = data.probs || {};
                 const isAlert = !!data.is_alert;
 
-                // Actualizar etiqueta
+                // Etiqueta
                 document.getElementById('label-text').textContent = label;
 
-                // Confianza de etiqueta actual
+                // Confianza
                 document.getElementById('conf-value').textContent = fmtProb(conf);
                 const bar = document.getElementById('conf-bar');
                 bar.style.width = (conf * 100).toFixed(1) + '%';
@@ -550,7 +581,6 @@
                 const text = document.getElementById('alert-text');
 
                 pill.classList.remove('status-pill--ok', 'status-pill--alert');
-
                 if (isAlert) {
                     pill.classList.add('status-pill--alert');
                     text.textContent = 'ALERTA DE EMERGENCIA';
@@ -564,7 +594,7 @@
                 document.getElementById('last-update').textContent = now.toLocaleTimeString();
                 document.getElementById('threshold-text').textContent = ALERT_THRESHOLD.toFixed(2);
 
-                // GPS en panel
+                // GPS en panel principal
                 const gps = data.gps || {};
                 const lat = gps.lat ?? gps.latitude ?? gps.Latitude ?? '-';
                 const lon = gps.lon ?? gps.lng ?? gps.longitude ?? gps.Longitude ?? '-';
@@ -572,12 +602,8 @@
                 document.getElementById('gps-lat').textContent = lat;
                 document.getElementById('gps-lon').textContent = lon;
 
-                // Historial de alertas
-                if (isAlert) {
-                    updateAlertHistory(data);
-                } else {
-                    prevIsAlert = false;
-                }
+                // Historial de alertas (con audio asociado)
+                updateAlertHistoryFromStatus(data);
 
             } catch (err) {
                 console.error('Error obteniendo /status:', err);

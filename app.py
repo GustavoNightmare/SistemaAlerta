@@ -1,31 +1,36 @@
-import threading
 import time
+from collections import deque
 from pathlib import Path
 
 import numpy as np
-import sounddevice as sd
 import librosa
-from flask import Flask, request, jsonify, render_template
-
+import soundfile as sf
+from flask import Flask, request, jsonify, render_template, send_file
 import tensorflow as tf
 
-# =========================
+# =====================================================
 # CONFIGURACIÓN
-# =========================
+# =====================================================
 
-SAMPLE_RATE = 16000     # Hz, igual que en el entrenamiento
-DURATION = 4.0          # segundos por ventana
+SAMPLE_RATE = 16000      # Hz
+DURATION = 4.0           # segundos por ventana
 N_MELS = 64
 
 MODEL_PATH = "modelo_sonidos.tflite"
 LABELS_PATH = "label_names.npy"
 
-ALERT_THRESHOLD = 0.80  # umbral de probabilidad para marcar emergencia
+ALERT_THRESHOLD = 0.70   # umbral para emergencia (ajusta a gusto)
 
+AUDIO_BUFFER_SAMPLES = int(SAMPLE_RATE * DURATION)
+LAST_AUDIO_PATH = Path("last_audio.wav")
 
-# =========================
+ALERTS_DIR = Path("alerts")         # carpeta para audios de alertas
+ALERTS_DIR.mkdir(exist_ok=True)
+ALERT_HISTORY_LIMIT = 50            # máximo de alertas guardadas en memoria
+
+# =====================================================
 # CARGAR MODELO TFLITE
-# =========================
+# =====================================================
 
 interpreter = tf.lite.Interpreter(model_path=MODEL_PATH)
 interpreter.allocate_tensors()
@@ -33,30 +38,22 @@ interpreter.allocate_tensors()
 input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
 
-# Cargar nombres de clases: ['ruido', 'emergencia']
 label_names = np.load(LABELS_PATH, allow_pickle=True)
 label_names = [str(x) for x in label_names]
 
-# Asumimos el orden que usamos en el entrenamiento binario:
-# LABEL_NAMES = ["ruido", "emergencia"]
-NOISE_LABEL = label_names[0]
-EMERG_LABEL = label_names[1]
+NOISE_LABEL = label_names[0]    # 'ruido'
+EMERG_LABEL = label_names[1]    # 'emergencia'
 
 print("Clases cargadas:", label_names)
 print("NOISE_LABEL:", NOISE_LABEL)
 print("EMERG_LABEL:", EMERG_LABEL)
 
-
-# =========================
+# =====================================================
 # PREPROCESAMIENTO
-# =========================
+# =====================================================
+
 
 def waveform_to_melspec(y, sr=SAMPLE_RATE):
-    """
-    y: señal 1D (numpy array) en float32.
-    Devuelve mel-espectrograma normalizado (n_mels, time, 1).
-    """
-    # Duración fija (recortar / rellenar)
     target_length = int(sr * DURATION)
     if len(y) > target_length:
         y = y[:target_length]
@@ -64,7 +61,6 @@ def waveform_to_melspec(y, sr=SAMPLE_RATE):
         pad_width = target_length - len(y)
         y = np.pad(y, (0, pad_width), mode="constant")
 
-    # Mel-espectrograma
     S = librosa.feature.melspectrogram(
         y=y,
         sr=sr,
@@ -75,34 +71,23 @@ def waveform_to_melspec(y, sr=SAMPLE_RATE):
 
     S_db = librosa.power_to_db(S, ref=np.max)
 
-    # Normalizar a [0,1]
     S_min, S_max = S_db.min(), S_db.max()
     S_norm = (S_db - S_min) / (S_max - S_min + 1e-8)
 
     S_norm = S_norm.astype("float32")
-    S_norm = np.expand_dims(S_norm, axis=-1)  # (n_mels, time, 1)
+    S_norm = np.expand_dims(S_norm, axis=-1)
     return S_norm
 
 
 def predict_from_waveform(y):
-    """
-    Usa el modelo TFLite para predecir a partir de la señal de audio cruda.
-    Devuelve:
-      - label: clase ganadora ('ruido' o 'emergencia')
-      - conf: probabilidad de la clase ganadora
-      - probs: dict {clase: probabilidad}
-    """
-    spec = waveform_to_melspec(y)                # (n_mels, time, 1)
-    input_data = np.expand_dims(spec, axis=0)    # (1, n_mels, time, 1)
+    spec = waveform_to_melspec(y)
+    input_data = np.expand_dims(spec, axis=0)
 
-    # Asegurar que el tamaño coincide con el esperado por el modelo
-    expected_shape = tuple(input_details[0]['shape'])  # p.ej. (1, 64, 122, 1)
+    expected_shape = tuple(input_details[0]["shape"])
 
     if input_data.shape != expected_shape:
         _, n_mels_e, time_e, ch_e = expected_shape
         spec_resized = spec
-
-        # Recortar o rellenar en eje de tiempo
         if spec_resized.shape[1] > time_e:
             spec_resized = spec_resized[:, :time_e, :]
         else:
@@ -110,87 +95,161 @@ def predict_from_waveform(y):
             spec_resized = np.pad(
                 spec_resized,
                 ((0, 0), (0, pad_width), (0, 0)),
-                mode="constant"
+                mode="constant",
             )
-
         input_data = np.expand_dims(spec_resized, axis=0).astype("float32")
 
-    # Inferencia TFLite
-    interpreter.set_tensor(input_details[0]['index'], input_data)
+    interpreter.set_tensor(input_details[0]["index"], input_data)
     interpreter.invoke()
-    output_data = interpreter.get_tensor(
-        output_details[0]['index'])[0]  # shape (2,)
+    output_data = interpreter.get_tensor(output_details[0]["index"])[0]
 
-    # Probabilidades por clase
     probs = {label_names[i]: float(p) for i, p in enumerate(output_data)}
-
-    # Clase ganadora
     idx = int(np.argmax(output_data))
     label = label_names[idx]
     conf = float(output_data[idx])
 
     return label, conf, probs
 
+# =====================================================
+# ESTADO GLOBAL
+# =====================================================
 
-# =========================
-# ESTADO GLOBAL (audio + GPS)
-# =========================
 
 current_result = {
     "label": None,
     "conf": 0.0,
-    "probs": {}
+    "probs": {},
 }
 
 last_gps_data = {}
 
+audio_buffer = deque(maxlen=AUDIO_BUFFER_SAMPLES)
+last_audio_update = 0.0
 
-# =========================
-# CAPTURA DE AUDIO EN HILO
-# =========================
+alerts_history = []      # lista de dicts con info de cada alerta
+last_alert_info = None   # última alerta registrada
+alert_counter = 0
 
-def audio_loop():
-    global current_result
-    print("🎙 Iniciando captura de audio en tiempo real...")
-
-    while True:
-        try:
-            # Grabar DURATION segundos del micrófono
-            frames = int(DURATION * SAMPLE_RATE)
-            audio = sd.rec(
-                frames,
-                samplerate=SAMPLE_RATE,
-                channels=1,
-                dtype="float32"
-            )
-            sd.wait()  # esperar a que termine la grabación
-
-            y = audio.flatten()   # pasar a vector 1D
-
-            label, conf, probs = predict_from_waveform(y)
-
-            current_result = {
-                "label": label,
-                "conf": conf,
-                "probs": probs
-            }
-
-            # pequeño descanso para no reventar la CPU
-            time.sleep(0.1)
-
-        except Exception as e:
-            print("❌ Error en audio_loop:", e)
-            time.sleep(1.0)
-
-
-# =========================
-# SERVIDOR FLASK
-# =========================
+# =====================================================
+# FLASK
+# =====================================================
 
 app = Flask(__name__)
 
+# ---------- AUDIO DESDE LA ESP32 ----------
 
-# ---------- RUTAS GPS ----------
+
+@app.route("/audio_upload", methods=["POST"])
+def audio_upload():
+    global current_result, last_audio_update
+    global alerts_history, last_alert_info, alert_counter
+
+    raw = request.get_data()
+    if not raw:
+        return jsonify({"error": "empty body"}), 400
+
+    fmt = (request.headers.get("X-Audio-Format") or "pcm16").lower()
+    sr = int(request.headers.get("X-Sample-Rate") or SAMPLE_RATE)
+
+    if fmt != "pcm16":
+        return jsonify({"error": "unsupported format"}), 400
+
+    if sr != SAMPLE_RATE:
+        # Si quieres, aquí podrías re-muestrear.
+        pass
+
+    # int16 LE -> float32 [-1,1]
+    audio_int16 = np.frombuffer(raw, dtype="<i2")
+    y = audio_int16.astype("float32") / 32768.0
+
+    # Añadir al buffer circular
+    for s in y:
+        audio_buffer.append(s)
+
+    # Cuando tenemos al menos 4 s, hacemos inferencia
+    if len(audio_buffer) >= AUDIO_BUFFER_SAMPLES:
+        window = np.array(audio_buffer, dtype="float32")
+
+        # Guardar siempre la última ventana por si quieres depurar
+        try:
+            sf.write(str(LAST_AUDIO_PATH), window, SAMPLE_RATE)
+        except Exception as e:
+            print("Error guardando last_audio.wav:", e)
+
+        # Inferencia
+        label, conf, probs = predict_from_waveform(window)
+        emerg_prob = float(probs.get(EMERG_LABEL, 0.0))
+
+        print(f"[AUDIO] Predicción: {label} conf={conf:.3f} probs={probs}")
+
+        current_result = {
+            "label": label,
+            "conf": conf,
+            "probs": probs,
+        }
+        last_audio_update = time.time()
+
+        # ¿Es alerta?
+        is_alert_now = emerg_prob >= ALERT_THRESHOLD
+        now_ts = time.time()
+
+        if is_alert_now:
+            # Evitar crear 100 alertas seguidas para el mismo evento:
+            # solo si ha pasado al menos DURATION s desde la última alerta
+            if (last_alert_info is None) or (now_ts - last_alert_info["ts"] > DURATION):
+                alert_counter += 1
+                alert_id = alert_counter
+
+                alert_path = ALERTS_DIR / f"alert_{alert_id}.wav"
+                try:
+                    sf.write(str(alert_path), window, SAMPLE_RATE)
+                except Exception as e:
+                    print("Error guardando audio de alerta:", e)
+
+                gps_snapshot = dict(last_gps_data) if last_gps_data else {}
+
+                alert_info = {
+                    "id": alert_id,
+                    "ts": now_ts,
+                    "emerg_prob": emerg_prob,
+                    "label": label,
+                    "gps": gps_snapshot,
+                    "audio_path": str(alert_path),
+                }
+
+                alerts_history.append(alert_info)
+                # Limitar tamaño del historial en memoria
+                if len(alerts_history) > ALERT_HISTORY_LIMIT:
+                    alerts_history = alerts_history[-ALERT_HISTORY_LIMIT:]
+
+                last_alert_info = alert_info
+                print(f"[ALERTA] Registrada alerta #{alert_id}")
+
+    return jsonify({"status": "ok"})
+
+# Último audio crudo (para debug opcional)
+
+
+@app.route("/last_audio.wav")
+def last_audio():
+    if not LAST_AUDIO_PATH.exists():
+        return ("No hay audio todavía", 404)
+    return send_file(str(LAST_AUDIO_PATH), mimetype="audio/wav")
+
+# Audio específico de una alerta
+
+
+@app.route("/alert_audio/<int:alert_id>.wav")
+def alert_audio(alert_id):
+    for a in alerts_history:
+        if a["id"] == alert_id:
+            path = a["audio_path"]
+            if Path(path).exists():
+                return send_file(path, mimetype="audio/wav")
+    return ("Audio de alerta no encontrado", 404)
+
+# ---------- GPS ----------
+
 
 @app.route('/gps', methods=['GET', 'POST'])
 def receive_gps():
@@ -201,58 +260,53 @@ def receive_gps():
         print("Datos GPS recibidos:", last_gps_data)
         return jsonify({"status": "ok"}), 200
 
-    # GET: página con mapa
     return render_template('gps.html', data=last_gps_data)
 
 
 @app.route('/gps/json')
 def gps_json():
-    """Devuelve el último dato como JSON (para AJAX)."""
     return jsonify(last_gps_data)
 
+# ---------- ESTADO GLOBAL PARA EL PANEL ----------
 
-# ---------- ESTADO AUDIO + ALERTA + GPS ----------
 
 @app.route('/status')
 def status():
-    """
-    Devuelve el estado actual del modelo de audio
-    + info de alerta + último GPS.
-    """
-    data = dict(current_result)  # copia
+    data = dict(current_result)
 
     probs = data.get("probs") or {}
     emerg_prob = float(probs.get(EMERG_LABEL, 0.0))
 
-    # alerta si la probabilidad de 'emergencia' >= umbral
     is_alert = emerg_prob >= ALERT_THRESHOLD
 
     data["is_alert"] = is_alert
     data["emerg_prob"] = emerg_prob
     data["noise_prob"] = float(probs.get(NOISE_LABEL, 0.0))
-
-    # Añadimos último GPS
     data["gps"] = last_gps_data
 
+    # Info de la última alerta (para el historial en el frontend)
+    if last_alert_info is not None:
+        alert = {
+            "id": last_alert_info["id"],
+            "ts": last_alert_info["ts"],
+            "emerg_prob": last_alert_info["emerg_prob"],
+            "label": last_alert_info["label"],
+            "gps": last_alert_info.get("gps", {}),
+            "audio_url": f"/alert_audio/{last_alert_info['id']}.wav",
+        }
+    else:
+        alert = None
+
+    data["last_alert"] = alert
     return jsonify(data)
 
+# ---------- VISTA PRINCIPAL ----------
 
-# ---------- DASHBOARD PRINCIPAL ----------
 
 @app.route('/')
 def index():
-    # Panel principal
     return render_template('dashboard.html')
 
 
-# =========================
-# MAIN
-# =========================
-
 if __name__ == "__main__":
-    # Iniciar hilo de audio
-    t = threading.Thread(target=audio_loop, daemon=True)
-    t.start()
-
-    # Lanzar Flask
     app.run(host="0.0.0.0", port=5000, debug=True)
