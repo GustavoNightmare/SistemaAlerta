@@ -11,19 +11,31 @@ from sklearn.metrics import classification_report, confusion_matrix
 import tensorflow as tf
 from tensorflow.keras import layers, models, regularizers
 
+# --- Comprobar GPU y activar memory growth (DirectML o CUDA) ---
+gpus = tf.config.list_physical_devices('GPU')
+if gpus:
+    try:
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+        print("✅ GPU disponible. Usando:", gpus)
+    except RuntimeError as e:
+        print("Error configurando GPU:", e)
+else:
+    print("⚠ No se encontró GPU. Entrenando en CPU.")
+
 # =========================
 # CONFIGURACIÓN
 # =========================
 
-# Carpetas de datos (ajusta nombres si hace falta)
+# Carpetas de datos
 CLASS_FOLDERS = {
     "ruido": "ruido_final",
     "emergencia": "emergencia_final",
 }
 
 SAMPLE_RATE = 16000       # Hz
-WINDOW_SEC = 4.0          # tamaño de ventana
-STEP_SEC = 4.0            # paso entre ventanas (sin solape)
+WINDOW_SEC = 4.0          # tamaño de ventana (segundos)
+STEP_SEC = 4.0            # paso entre ventanas para ruido (sin solape)
 N_MELS = 64
 
 DO_AUGMENT = True         # activar / desactivar data augmentation
@@ -38,15 +50,16 @@ np.random.seed(SEED)
 random.seed(SEED)
 tf.random.set_seed(SEED)
 
-
 # =========================
 # FUNCIONES DE AUDIO
 # =========================
+
 
 def split_into_windows(y, sr=SAMPLE_RATE):
     """
     Divide un audio en ventanas de WINDOW_SEC con paso STEP_SEC.
     Si la última queda más corta, la rellena con ceros.
+    Usado para la clase 'ruido'.
     """
     win_len = int(WINDOW_SEC * sr)
     step = int(STEP_SEC * sr)
@@ -65,29 +78,69 @@ def split_into_windows(y, sr=SAMPLE_RATE):
     return windows
 
 
+def extract_emergency_window(y, sr=SAMPLE_RATE):
+    """
+    Para audios de 'emergencia':
+      - Si el audio < 4 s: se rellena con ceros.
+      - Si es más largo: se busca la zona de mayor energía
+        y se recorta UNA sola ventana de 4 s alrededor de ese pico.
+    Así evitamos tener muchas ventanas con solo ruido etiquetadas como emergencia.
+    """
+    win_len = int(WINDOW_SEC * sr)
+
+    if len(y) <= win_len:
+        # Rellenar hasta 4 s
+        pad_width = win_len - len(y)
+        y = np.pad(y, (0, pad_width), mode="constant")
+        return y.astype("float32")
+
+    # Ventanas cortas (p.ej. 250 ms) para estimar dónde está el pico de energía
+    frame_len = int(0.25 * sr)  # 250 ms
+    hop = frame_len // 2        # 50% solape
+
+    num_frames = max(1, 1 + (len(y) - frame_len) // hop)
+    rms_vals = []
+
+    for i in range(num_frames):
+        start = i * hop
+        end = start + frame_len
+        if end > len(y):
+            end = len(y)
+        frame = y[start:end]
+        if len(frame) == 0:
+            rms_vals.append(0.0)
+        else:
+            rms_vals.append(float(np.sqrt(np.mean(frame ** 2))))
+
+    best_idx = int(np.argmax(rms_vals))
+    best_center = best_idx * hop + frame_len // 2
+
+    start_win = int(best_center - win_len // 2)
+    if start_win < 0:
+        start_win = 0
+    if start_win + win_len > len(y):
+        start_win = len(y) - win_len
+
+    window = y[start_win:start_win + win_len]
+    return window.astype("float32")
+
+
 def augment_wave(y, sr=SAMPLE_RATE):
     """
-    Data augmentation sencillo:
-      - Pequeña variación de ganancia.
-      - Ligero desplazamiento temporal.
-      - Ruido blanco suave.
+    Data augmentation suave:
+      - Variación de ganancia.
+      - Un poco de ruido blanco suave.
+    NO hacemos shift temporal para no mover el evento dentro de la ventana.
     """
     y = y.copy()
 
-    # Ganancia [0.7, 1.3]
-    gain = np.random.uniform(0.7, 1.3)
+    # Ganancia moderada [0.75, 1.25]
+    gain = np.random.uniform(0.75, 1.25)
     y *= gain
 
-    # Pequeño shift temporal ±0.25s
-    max_shift = int(0.25 * sr)
-    shift = np.random.randint(-max_shift, max_shift + 1)
-    if shift > 0:
-        y = np.pad(y, (shift, 0), mode="constant")[: len(y)]
-    elif shift < 0:
-        y = np.pad(y, (0, -shift), mode="constant")[-len(y):]
-
-    # Ruido blanco suave
-    noise_amp = 0.003 * np.random.uniform(0.5, 1.5) * np.max(np.abs(y) + 1e-6)
+    # Pequeño ruido blanco (bastante más suave que antes)
+    max_abs = np.max(np.abs(y)) + 1e-6
+    noise_amp = 0.0015 * np.random.uniform(0.5, 1.5) * max_abs
     noise = noise_amp * np.random.normal(size=y.shape)
     y = y + noise
 
@@ -123,16 +176,18 @@ def waveform_to_melspec(y, sr=SAMPLE_RATE):
     S_norm = np.expand_dims(S_norm, axis=-1)  # (n_mels, time, 1)
     return S_norm
 
-
 # =========================
 # CARGAR DATASET + SEGMENTAR
 # =========================
 
+
 def load_dataset():
     """
-    Lee todas las carpetas de CLASS_FOLDERS, segmenta en ventanas de 4 s,
-    aplica data augmentation y devuelve:
+    Lee todas las carpetas de CLASS_FOLDERS y devuelve:
       X (espectrogramas), y (labels), meta (info por ventana), label_names
+
+    - 'ruido': se trocea en muchas ventanas de 4 s.
+    - 'emergencia': se extrae UNA ventana de 4 s por archivo (ventana de máxima energía).
     meta[i] = (ruta_archivo, indice_ventana, nombre_clase_original)
     """
     X_list = []
@@ -159,6 +214,8 @@ def load_dataset():
 
         total_windows = 0
 
+        is_emergency = (label_name == "emergencia")
+
         for audio_path in file_paths:
             try:
                 y, sr = librosa.load(audio_path, sr=SAMPLE_RATE, mono=True)
@@ -166,7 +223,13 @@ def load_dataset():
                 print(f"  ❌ Error cargando {audio_path.name}: {e}")
                 continue
 
-            windows = split_into_windows(y, sr)
+            if is_emergency:
+                # Solo una ventana de 4 s, centrada en la zona de mayor energía
+                windows = [extract_emergency_window(y, sr)]
+            else:
+                # Ruido: troceamos todo el audio en ventanas de 4 s
+                windows = split_into_windows(y, sr)
+
             if not windows:
                 continue
 
@@ -185,11 +248,13 @@ def load_dataset():
                         X_list.append(spec_aug)
                         y_list.append(label_to_idx[label_name])
                         meta.append(
-                            (str(audio_path), win_idx, label_name + "_aug"))
+                            (str(audio_path), win_idx, label_name + "_aug")
+                        )
 
                 total_windows += 1
 
-        print(f"  -> Ventanas generadas (sin contar augment): {total_windows}")
+        print(
+            f"  -> Ventanas generadas para '{label_name}' (sin contar augment): {total_windows}")
 
     X = np.array(X_list, dtype="float32")
     y = np.array(y_list, dtype=np.int64)
@@ -200,10 +265,10 @@ def load_dataset():
 
     return X, y, meta, label_names
 
-
 # =========================
 # MODELOS
 # =========================
+
 
 def build_cnn_small(input_shape, num_classes):
     """
@@ -279,10 +344,10 @@ def build_cnn_big(input_shape, num_classes):
     )
     return model
 
-
 # =========================
 # UTILIDADES: SPLIT + CLASS WEIGHTS
 # =========================
+
 
 def make_splits(X, y, meta):
     indices = np.arange(len(X))
@@ -379,10 +444,10 @@ def save_misclassified_csv(
 
     print(f"CSV de errores guardado en: {filename}")
 
-
 # =========================
 # MAIN: ENTRENAR Y EVALUAR
 # =========================
+
 
 def run_experiment(name, build_fn,
                    X_train, y_train, meta_train,
@@ -450,8 +515,6 @@ def run_experiment(name, build_fn,
         idx_test, y_test, y_pred, y_probs,
         meta, label_names,
     )
-
-    # (Opcional) también podrías sacar errores de train/val igual que arriba.
 
     # Guardar modelo final
     model.save(f"modelo_{name}.h5")

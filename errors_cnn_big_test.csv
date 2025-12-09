@@ -1,0 +1,26 @@
+filepath,window_idx,true_label,pred_label,prob_true,prob_pred
+E:\ProyectosVisualStudio\Enfasis2\SistemaAlerta\emergencia_final\1212_s0.00.wav,0,emergencia,ruido,0.4915,0.5085
+E:\ProyectosVisualStudio\Enfasis2\SistemaAlerta\ruido_final\I4yKEKiFHPQ_out.wav,1,ruido,emergencia,0.3370,0.6630
+E:\ProyectosVisualStudio\Enfasis2\SistemaAlerta\emergencia_final\1167_s0.00.wav,0,emergencia,ruido,0.0362,0.9638
+E:\ProyectosVisualStudio\Enfasis2\SistemaAlerta\ruido_final\W09-xl4SEnI_out.wav,1,ruido,emergencia,0.4865,0.5135
+E:\ProyectosVisualStudio\Enfasis2\SistemaAlerta\ruido_final\m1k9Selk_3I_out.wav,1,ruido,emergencia,0.2073,0.7927
+E:\ProyectosVisualStudio\Enfasis2\SistemaAlerta\ruido_final\269.wav,0,ruido,emergencia,0.3317,0.6683
+E:\ProyectosVisualStudio\Enfasis2\SistemaAlerta\emergencia_final\0o1aGQAWcQE_out_s4.75.wav,0,emergencia,ruido,0.0682,0.9318
+E:\ProyectosVisualStudio\Enfasis2\SistemaAlerta\ruido_final\759.wav,0,ruido,emergencia,0.1532,0.8468
+E:\ProyectosVisualStudio\Enfasis2\SistemaAlerta\emergencia_final\1298_s0.00.wav,0,emergencia,ruido,0.2725,0.7275
+E:\ProyectosVisualStudio\Enfasis2\SistemaAlerta\emergencia_final\0f9222e9-7896-4a30-b161-092a2931ebb8_v7_s0.00.wav,0,emergencia,ruido,0.2312,0.7688
+E:\ProyectosVisualStudio\Enfasis2\SistemaAlerta\emergencia_final\1027 (2)_s0.00.wav,0,emergencia,ruido,0.3817,0.6183
+E:\ProyectosVisualStudio\Enfasis2\SistemaAlerta\emergencia_final\1149_s0.00.wav,0,emergencia,ruido,0.0637,0.9363
+E:\ProyectosVisualStudio\Enfasis2\SistemaAlerta\ruido_final\XWj7nP7kfdQ_out.wav,0,ruido,emergencia,0.4477,0.5523
+E:\ProyectosVisualStudio\Enfasis2\SistemaAlerta\emergencia_final\1141_s0.00.wav,0,emergencia,ruido,0.2132,0.7868
+E:\ProyectosVisualStudio\Enfasis2\SistemaAlerta\ruido_final\maleScream-082.wav,0,ruido,emergencia,0.4565,0.5435
+E:\ProyectosVisualStudio\Enfasis2\SistemaAlerta\emergencia_final\1254_s0.00.wav,0,emergencia,ruido,0.1397,0.8603
+E:\ProyectosVisualStudio\Enfasis2\SistemaAlerta\emergencia_final\1296_s0.00.wav,0,emergencia,ruido,0.4542,0.5458
+E:\ProyectosVisualStudio\Enfasis2\SistemaAlerta\ruido_final\7wXfKPtFNpE_out.wav,2,ruido,emergencia,0.3474,0.6526
+E:\ProyectosVisualStudio\Enfasis2\SistemaAlerta\emergencia_final\1092 (2)_s0.00.wav,0,emergencia,ruido,0.1358,0.8642
+E:\ProyectosVisualStudio\Enfasis2\SistemaAlerta\emergencia_final\1262_s0.00.wav,0,emergencia,ruido,0.4107,0.5893
+E:\ProyectosVisualStudio\Enfasis2\SistemaAlerta\emergencia_final\1247_s0.00.wav,0,emergencia,ruido,0.4841,0.5159
+E:\ProyectosVisualStudio\Enfasis2\SistemaAlerta\ruido_final\ibrI5oETbRg_out.wav,2,ruido,emergencia,0.2073,0.7927
+E:\ProyectosVisualStudio\Enfasis2\SistemaAlerta\ruido_final\-2yygHLdpXc_out.wav,1,ruido,emergencia,0.2041,0.7959
+E:\ProyectosVisualStudio\Enfasis2\SistemaAlerta\emergencia_final\-4pUrlMafww_out_s5.00.wav,0,emergencia,ruido,0.0048,0.9952
+E:\ProyectosVisualStudio\Enfasis2\SistemaAlerta\emergencia_final\1204_s0.00.wav,0,emergencia,ruido,0.3590,0.6410

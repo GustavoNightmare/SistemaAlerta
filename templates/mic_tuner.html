@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="es">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Calibrador de micrófono ESP32</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #020617;
+            color: #e5e7eb;
+            margin: 0;
+            padding: 0;
+        }
+
+        .page {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 24px 16px 40px;
+        }
+
+        h1 {
+            margin-bottom: 4px;
+        }
+
+        .subtitle {
+            color: #9ca3af;
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1.6fr 1.4fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 900px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: #020617;
+            border-radius: 16px;
+            border: 1px solid #1f2937;
+            padding: 18px 20px;
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.8);
+        }
+
+        .card h2 {
+            font-size: 1rem;
+            margin-bottom: 8px;
+        }
+
+        .card p {
+            font-size: 0.85rem;
+            color: #9ca3af;
+        }
+
+        .slider-row {
+            margin-top: 12px;
+        }
+
+        .slider-row label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            margin-bottom: 4px;
+        }
+
+        .slider-row input[type="range"] {
+            width: 100%;
+        }
+
+        .btn-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        button {
+            border-radius: 999px;
+            padding: 8px 16px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .btn-primary {
+            background: #6366f1;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #4f46e5;
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: #e5e7eb;
+            border: 1px solid #1f2937;
+        }
+
+        .btn-ghost:hover {
+            background: rgba(15, 23, 42, 0.9);
+        }
+
+        .checkbox-row {
+            margin-top: 10px;
+            font-size: 0.85rem;
+        }
+
+        .status {
+            margin-top: 10px;
+            font-size: 0.8rem;
+            color: #9ca3af;
+        }
+
+        audio {
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        code {
+            background: #111827;
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page">
+        <h1>Calibrador de micrófono ESP32</h1>
+        <div class="subtitle">
+            Escucha lo que oye tu ESP32 (con un poco de delay) y ajusta el noise gate, AGC y compresor.
+        </div>
+
+        <div class="grid">
+            <!-- Panel de parámetros -->
+            <div class="card">
+                <h2>Parámetros de procesado</h2>
+                <p>Estos sliders afectan al audio procesado que escucharás en la previsualización.</p>
+
+                <div class="slider-row">
+                    <label>
+                        <span>Noise gate (int16)</span>
+                        <span id="noise_gate_value">100</span>
+                    </label>
+                    <input id="noise_gate" type="range" min="0" max="2000" step="10" value="100">
+                </div>
+
+                <div class="slider-row">
+                    <label>
+                        <span>Target level</span>
+                        <span id="target_level_value">0.25</span>
+                    </label>
+                    <input id="target_level" type="range" min="0.05" max="0.5" step="0.01" value="0.25">
+                </div>
+
+                <div class="slider-row">
+                    <label>
+                        <span>Max gain</span>
+                        <span id="max_gain_value">6.0</span>
+                    </label>
+                    <input id="max_gain" type="range" min="1.0" max="15.0" step="0.1" value="6.0">
+                </div>
+
+                <div class="slider-row">
+                    <label>
+                        <span>Min gain</span>
+                        <span id="min_gain_value">0.5</span>
+                    </label>
+                    <input id="min_gain" type="range" min="0.1" max="3.0" step="0.1" value="0.5">
+                </div>
+
+                <div class="slider-row">
+                    <label>
+                        <span>AGC speed</span>
+                        <span id="agc_speed_value">0.05</span>
+                    </label>
+                    <input id="agc_speed" type="range" min="0.01" max="0.2" step="0.01" value="0.05">
+                </div>
+
+                <div class="slider-row">
+                    <label>
+                        <span>Compression threshold</span>
+                        <span id="compression_threshold_value">0.6</span>
+                    </label>
+                    <input id="compression_threshold" type="range" min="0.2" max="0.9" step="0.05" value="0.6">
+                </div>
+
+                <div class="slider-row">
+                    <label>
+                        <span>Compression ratio</span>
+                        <span id="compression_ratio_value">3.0</span>
+                    </label>
+                    <input id="compression_ratio" type="range" min="1.0" max="8.0" step="0.5" value="3.0">
+                </div>
+
+                <div class="checkbox-row">
+                    <label>
+                        <input type="checkbox" id="apply_processing" checked>
+                        Aplicar filtros / AGC / compresor en el servidor
+                    </label>
+                </div>
+
+                <div class="btn-row">
+                    <button class="btn-primary" onclick="saveParams()">Guardar parámetros</button>
+                    <button class="btn-ghost" onclick="loadParams()">Recargar parámetros del servidor</button>
+                </div>
+
+                <div class="status" id="status_text">
+                    Parámetros no guardados todavía.
+                </div>
+            </div>
+
+            <!-- Panel de audio -->
+            <div class="card">
+                <h2>Escuchar lo que oye la ESP32</h2>
+                <p>
+                    El servidor guarda los últimos <strong>6 s</strong> de audio crudo.
+                    Puedes escuchar una ventana de <strong>3 s</strong> usando el botón.
+                </p>
+
+                <div class="btn-row">
+                    <button class="btn-primary" onclick="playPreview()">Reproducir últimos 3 segundos</button>
+                </div>
+
+                <audio id="audio_preview" controls>
+                    Tu navegador no soporta audio HTML5.
+                </audio>
+
+                <div class="status" style="margin-top: 12px;">
+                    Consejo: habla, aplaude o reproduce sonidos cerca del micrófono, luego
+                    pulsa <code>Reproducir últimos 3 segundos</code> y ajusta los sliders hasta que
+                    el ruido de fondo baje y las emergencias sigan sonando claras.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function updateLabel(id, value) {
+            document.getElementById(id + "_value").textContent = Number(value).toFixed(3).replace(/\.?0+$/, "");
+        }
+
+        function attachSlider(id) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener("input", () => {
+                updateLabel(id, el.value);
+            });
+            updateLabel(id, el.value);
+        }
+
+        ["noise_gate", "target_level", "max_gain", "min_gain",
+            "agc_speed", "compression_threshold", "compression_ratio"].forEach(attachSlider);
+
+        async function loadParams() {
+            try {
+                const res = await fetch("/params");
+                const data = await res.json();
+
+                if (data.noise_gate !== undefined) {
+                    noise_gate.value = data.noise_gate;
+                    updateLabel("noise_gate", noise_gate.value);
+                }
+                if (data.target_level !== undefined) {
+                    target_level.value = data.target_level;
+                    updateLabel("target_level", target_level.value);
+                }
+                if (data.max_gain !== undefined) {
+                    max_gain.value = data.max_gain;
+                    updateLabel("max_gain", max_gain.value);
+                }
+                if (data.min_gain !== undefined) {
+                    min_gain.value = data.min_gain;
+                    updateLabel("min_gain", min_gain.value);
+                }
+                if (data.agc_speed !== undefined) {
+                    agc_speed.value = data.agc_speed;
+                    updateLabel("agc_speed", agc_speed.value);
+                }
+                if (data.compression_threshold !== undefined) {
+                    compression_threshold.value = data.compression_threshold;
+                    updateLabel("compression_threshold", compression_threshold.value);
+                }
+                if (data.compression_ratio !== undefined) {
+                    compression_ratio.value = data.compression_ratio;
+                    updateLabel("compression_ratio", compression_ratio.value);
+                }
+                if (data.apply_processing !== undefined) {
+                    document.getElementById("apply_processing").checked = data.apply_processing;
+                }
+
+                document.getElementById("status_text").textContent = "Parámetros cargados desde el servidor.";
+            } catch (err) {
+                console.error(err);
+                document.getElementById("status_text").textContent = "Error al cargar parámetros.";
+            }
+        }
+
+        async function saveParams() {
+            const body = {
+                noise_gate: parseFloat(noise_gate.value),
+                target_level: parseFloat(target_level.value),
+                max_gain: parseFloat(max_gain.value),
+                min_gain: parseFloat(min_gain.value),
+                agc_speed: parseFloat(agc_speed.value),
+                compression_threshold: parseFloat(compression_threshold.value),
+                compression_ratio: parseFloat(compression_ratio.value),
+                apply_processing: document.getElementById("apply_processing").checked,
+            };
+
+            try {
+                const res = await fetch("/params", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body),
+                });
+                const data = await res.json();
+                document.getElementById("status_text").textContent = "Parámetros guardados.";
+            } catch (err) {
+                console.error(err);
+                document.getElementById("status_text").textContent = "Error al guardar parámetros.";
+            }
+        }
+
+        function playPreview() {
+            const audio = document.getElementById("audio_preview");
+            const ts = Date.now();
+            audio.src = "/preview.wav?ts=" + ts;
+            audio.play().catch(err => console.log(err));
+        }
+
+        // cargar parámetros al inicio
+        loadParams();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Revisor de emergencias</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #050816;
+            color: #f9fafb;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        .container {
+            max-width: 960px;
+            width: 100%;
+            margin: 40px;
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 24px;
+        }
+
+        .card {
+            background: #020617;
+            border-radius: 18px;
+            padding: 24px;
+            box-shadow: 0 20px 40px rgba(15, 23, 42, 0.7);
+            border: 1px solid #1f2937;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        h2 {
+            font-size: 18px;
+            margin-bottom: 12px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: #9ca3af;
+            margin-bottom: 16px;
+        }
+
+        label {
+            font-size: 14px;
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
+
+        .value {
+            font-size: 13px;
+            color: #d1d5db;
+        }
+
+        button {
+            border: none;
+            border-radius: 9999px;
+            padding: 8px 16px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-right: 8px;
+            margin-top: 12px;
+        }
+
+        .btn-primary {
+            background: #6366f1;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #4f46e5;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #b91c1c;
+        }
+
+        .btn-secondary {
+            background: #111827;
+            color: #e5e7eb;
+            border: 1px solid #374151;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            background: #1f2937;
+            font-size: 12px;
+            color: #e5e7eb;
+            margin-bottom: 8px;
+        }
+
+        audio {
+            width: 100%;
+            margin-top: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>Revisor de emergencias</h1>
+            <div class="subtitle">
+                Archivo actual: <strong>{{ audio_file }}</strong><br>
+                Duración: {{ duration }} s
+            </div>
+
+            <span class="badge">Ventana fija: {{ window_sec }} segundos</span>
+
+            <label for="start-slider">Inicio de la ventana (segundos)</label>
+            <input id="start-slider" type="range" min="0" max="{{ max_start }}" step="0.05" value="0">
+            <div class="value">
+                Inicio: <span id="start-value">0.00</span> s &nbsp;|&nbsp;
+                Fin: <span id="end-value">{{ "%.2f" % window_sec }}</span> s
+            </div>
+
+            <button class="btn-secondary" id="btn-preview">Previsualizar recorte (4 s)</button>
+
+            <form id="save-form" method="POST" action="{{ url_for('save_snippet') }}">
+                <input type="hidden" name="filename" value="{{ audio_file }}">
+                <input type="hidden" name="start" id="start-input" value="0">
+                <button type="submit" class="btn-primary">Guardar recorte (4 s)</button>
+            </form>
+
+            <form method="POST" action="{{ url_for('delete_audio') }}"
+                onsubmit="return confirm('¿Seguro que quieres descartar este audio completo?');">
+                <input type="hidden" name="filename" value="{{ audio_file }}">
+                <button type="submit" class="btn-danger">Descartar audio</button>
+            </form>
+
+            <div class="subtitle" style="margin-top: 16px;">
+                Flujo recomendado:
+                <ol style="margin-top:8px; padding-left:18px; font-size:13px;">
+                    <li>Escucha el audio completo.</li>
+                    <li>Mueve el slider hasta que la ventana de 4 s cubra la parte donde está el grito/disparo.</li>
+                    <li>Pulsa <strong>Previsualizar recorte</strong> para asegurarte.</li>
+                    <li>Pulsa <strong>Guardar recorte</strong>. El recorte se guarda en <code>emergencia_final/</code>
+                        y el original se mueve a <code>emergencia_descartada/</code>.</li>
+                </ol>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Escuchar audio completo</h2>
+            <div class="subtitle">
+                Usa este reproductor para encontrar visualmente (por el tiempo) dónde está la emergencia.
+            </div>
+            <audio id="audio" controls>
+                <source src="{{ url_for('serve_audio', filename=audio_file) }}" type="audio/wav">
+                Tu navegador no soporta audio HTML5.
+            </audio>
+
+            <div class="subtitle" style="margin-top:20px;">
+                Consejo: si el audio tiene varias emergencias, quédate con la parte donde suene más clara
+                y limpia. Si el archivo está muy mal (no se distingue nada), descártalo.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const windowSec = {{ window_sec }};
+        const slider = document.getElementById('start-slider');
+        const startValue = document.getElementById('start-value');
+        const endValue = document.getElementById('end-value');
+        const startInput = document.getElementById('start-input');
+        const audio = document.getElementById('audio');
+        const btnPreview = document.getElementById('btn-preview');
+
+        function updateTimes() {
+            const start = parseFloat(slider.value);
+            const end = start + windowSec;
+            startValue.textContent = start.toFixed(2);
+            endValue.textContent = end.toFixed(2);
+            startInput.value = start.toFixed(3);
+        }
+
+        slider.addEventListener('input', updateTimes);
+        updateTimes();
+
+        btnPreview.addEventListener('click', function () {
+            const start = parseFloat(slider.value);
+            const end = start + windowSec;
+
+            audio.currentTime = start;
+            audio.play();
+
+            const duration = (end - start) * 1000;
+            setTimeout(() => {
+                if (!audio.paused) {
+                    audio.pause();
+                }
+            }, duration);
+        });
+    </script>
+</body>
+
+</html>

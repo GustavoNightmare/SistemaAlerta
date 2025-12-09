@@ -7,3 +7,6 @@ ruido_final/
 *.crdownload
 alerts/
 emergencia_final/
+capturas_esp32/
+emergencia_raw/
+emergencia_descartada/
