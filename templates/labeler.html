@@ -1,214 +1,236 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 
 <head>
-    <meta charset="UTF-8">
-    <title>Revisor de emergencias</title>
+    <meta charset="utf-8" />
+    <title>Etiquetador de emergencias</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
         body {
             margin: 0;
-            padding: 0;
             font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            background: #050816;
-            color: #f9fafb;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
+            background: radial-gradient(circle at top, #1f2937, #020617);
+            color: #e5e7eb;
         }
 
-        .container {
-            max-width: 960px;
-            width: 100%;
-            margin: 40px;
-            display: grid;
-            grid-template-columns: 1.2fr 1fr;
-            gap: 24px;
-        }
-
-        .card {
-            background: #020617;
-            border-radius: 18px;
-            padding: 24px;
-            box-shadow: 0 20px 40px rgba(15, 23, 42, 0.7);
-            border: 1px solid #1f2937;
+        .page {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 24px 16px 40px;
         }
 
         h1 {
-            font-size: 24px;
-            margin-bottom: 8px;
-        }
-
-        h2 {
-            font-size: 18px;
-            margin-bottom: 12px;
+            font-size: 1.5rem;
+            margin-bottom: 4px;
         }
 
         .subtitle {
-            font-size: 14px;
+            font-size: 0.85rem;
             color: #9ca3af;
             margin-bottom: 16px;
         }
 
-        label {
-            font-size: 14px;
-            display: block;
-            margin-bottom: 6px;
+        .card {
+            background: rgba(15, 23, 42, 0.98);
+            border-radius: 18px;
+            padding: 18px 20px;
+            border: 1px solid #1f2937;
+            box-shadow: 0 16px 40px rgba(15, 23, 42, 0.9);
         }
 
-        input[type="range"] {
-            width: 100%;
-        }
-
-        .value {
-            font-size: 13px;
-            color: #d1d5db;
-        }
-
-        button {
-            border: none;
-            border-radius: 9999px;
-            padding: 8px 16px;
-            font-size: 14px;
-            cursor: pointer;
-            margin-right: 8px;
-            margin-top: 12px;
-        }
-
-        .btn-primary {
-            background: #6366f1;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #4f46e5;
-        }
-
-        .btn-danger {
-            background: #ef4444;
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background: #b91c1c;
-        }
-
-        .btn-secondary {
-            background: #111827;
-            color: #e5e7eb;
-            border: 1px solid #374151;
-        }
-
-        .badge {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 9999px;
-            background: #1f2937;
-            font-size: 12px;
-            color: #e5e7eb;
+        .filename {
+            font-weight: 600;
             margin-bottom: 8px;
         }
 
         audio {
             width: 100%;
-            margin-top: 12px;
+            margin: 8px 0 12px;
+        }
+
+        .hint {
+            font-size: 0.8rem;
+            color: #9ca3af;
+            margin-top: 4px;
+        }
+
+        .crop-box {
+            margin-top: 10px;
+            padding: 10px 12px;
+            border-radius: 14px;
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid #1f2937;
+            font-size: 0.85rem;
+        }
+
+        .crop-box label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 6px;
+        }
+
+        .crop-box input {
+            width: 80px;
+            padding: 3px 6px;
+            border-radius: 999px;
+            border: 1px solid #374151;
+            background: #020617;
+            color: #e5e7eb;
+            font-size: 0.85rem;
+        }
+
+        .buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .btn {
+            border: none;
+            border-radius: 999px;
+            padding: 7px 16px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.08s ease-out, box-shadow 0.08s ease-out, background 0.1s;
+        }
+
+        .btn:active {
+            transform: translateY(0);
+            box-shadow: none;
+        }
+
+        .btn-gun {
+            background: #f97316;
+            color: white;
+            box-shadow: 0 10px 24px rgba(248, 113, 113, 0.4);
+        }
+
+        .btn-gun:hover {
+            background: #ea580c;
+            transform: translateY(-1px);
+        }
+
+        .btn-scream {
+            background: #ef4444;
+            color: white;
+            box-shadow: 0 10px 24px rgba(239, 68, 68, 0.5);
+        }
+
+        .btn-scream:hover {
+            background: #dc2626;
+            transform: translateY(-1px);
+        }
+
+        .btn-discard {
+            background: transparent;
+            color: #9ca3af;
+            border: 1px solid #4b5563;
+        }
+
+        .btn-discard:hover {
+            background: rgba(15, 23, 42, 0.9);
+            color: #e5e7eb;
+        }
+
+        .info-foot {
+            margin-top: 14px;
+            font-size: 0.78rem;
+            color: #9ca3af;
+        }
+
+        code {
+            background: #111827;
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-size: 0.78rem;
         }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <div class="card">
-            <h1>Revisor de emergencias</h1>
-            <div class="subtitle">
-                Archivo actual: <strong>{{ audio_file }}</strong><br>
-                Duración: {{ duration }} s
-            </div>
-
-            <span class="badge">Ventana fija: {{ window_sec }} segundos</span>
-
-            <label for="start-slider">Inicio de la ventana (segundos)</label>
-            <input id="start-slider" type="range" min="0" max="{{ max_start }}" step="0.05" value="0">
-            <div class="value">
-                Inicio: <span id="start-value">0.00</span> s &nbsp;|&nbsp;
-                Fin: <span id="end-value">{{ "%.2f" % window_sec }}</span> s
-            </div>
-
-            <button class="btn-secondary" id="btn-preview">Previsualizar recorte (4 s)</button>
-
-            <form id="save-form" method="POST" action="{{ url_for('save_snippet') }}">
-                <input type="hidden" name="filename" value="{{ audio_file }}">
-                <input type="hidden" name="start" id="start-input" value="0">
-                <button type="submit" class="btn-primary">Guardar recorte (4 s)</button>
-            </form>
-
-            <form method="POST" action="{{ url_for('delete_audio') }}"
-                onsubmit="return confirm('¿Seguro que quieres descartar este audio completo?');">
-                <input type="hidden" name="filename" value="{{ audio_file }}">
-                <button type="submit" class="btn-danger">Descartar audio</button>
-            </form>
-
-            <div class="subtitle" style="margin-top: 16px;">
-                Flujo recomendado:
-                <ol style="margin-top:8px; padding-left:18px; font-size:13px;">
-                    <li>Escucha el audio completo.</li>
-                    <li>Mueve el slider hasta que la ventana de 4 s cubra la parte donde está el grito/disparo.</li>
-                    <li>Pulsa <strong>Previsualizar recorte</strong> para asegurarte.</li>
-                    <li>Pulsa <strong>Guardar recorte</strong>. El recorte se guarda en <code>emergencia_final/</code>
-                        y el original se mueve a <code>emergencia_descartada/</code>.</li>
-                </ol>
-            </div>
-        </div>
+    <div class="page">
+        <h1>Etiquetador de audios de emergencia</h1>
+        <p class="subtitle">
+            Archivo {{ idx + 1 }} de {{ total }} · origen: <code>{{ item.folder }}</code> ·
+            modo: {{ 'clip 4 s' if item.mode == 'clip' else 'raw (largo)' }}
+        </p>
 
         <div class="card">
-            <h2>Escuchar audio completo</h2>
-            <div class="subtitle">
-                Usa este reproductor para encontrar visualmente (por el tiempo) dónde está la emergencia.
-            </div>
-            <audio id="audio" controls>
-                <source src="{{ url_for('serve_audio', filename=audio_file) }}" type="audio/wav">
+            <div class="filename">{{ item.name }}</div>
+
+            <audio id="audio" controls src="{{ audio_url }}">
                 Tu navegador no soporta audio HTML5.
             </audio>
 
-            <div class="subtitle" style="margin-top:20px;">
-                Consejo: si el audio tiene varias emergencias, quédate con la parte donde suene más clara
-                y limpia. Si el archivo está muy mal (no se distingue nada), descártalo.
+            <form id="label-form" method="post" action="{{ url_for('save') }}">
+                <input type="hidden" name="rel_path" value="{{ item.rel_path }}">
+                <input type="hidden" name="mode" value="{{ item.mode }}">
+                <input type="hidden" name="idx" value="{{ idx }}">
+
+                {% if item.mode == 'raw' %}
+                <div class="crop-box">
+                    <p>
+                        Selecciona el inicio del fragmento de <strong>{{ window_sec }} s</strong>
+                        que contiene el grito o disparo.
+                    </p>
+                    <label>
+                        Inicio (segundos):
+                        <input type="number" step="0.1" min="0" id="start_sec" name="start_sec" value="0">
+                    </label>
+                    <button type="button" class="btn btn-discard" id="btn-from-current">
+                        Usar tiempo actual del reproductor
+                    </button>
+                    <div class="hint">
+                        Reproduce el audio, pausa justo donde empieza la emergencia
+                        y pulsa “Usar tiempo actual”.
+                    </div>
+                </div>
+                {% else %}
+                <p class="hint">
+                    Este archivo ya es un recorte de ~{{ window_sec }} s. Solo elige si es
+                    <strong>disparo</strong>, <strong>grito</strong> o se descarta.
+                </p>
+                {% endif %}
+
+                <div class="buttons">
+                    <button type="submit" name="label" value="disparo" class="btn btn-gun">
+                        Guardar como DISPARO
+                    </button>
+                    <button type="submit" name="label" value="grito" class="btn btn-scream">
+                        Guardar como GRITO
+                    </button>
+                    <button type="submit" name="label" value="descartar" class="btn btn-discard">
+                        Descartar
+                    </button>
+                </div>
+            </form>
+
+            <div class="info-foot">
+                Los recortes se guardan en <code>disparo_final/</code> o <code>grito_final/</code>.
+                Los audios descartados (incluidos los raw originales) se mueven a
+                <code>emergencia_descartada/</code>.
             </div>
         </div>
     </div>
 
     <script>
-        const windowSec = {{ window_sec }};
-        const slider = document.getElementById('start-slider');
-        const startValue = document.getElementById('start-value');
-        const endValue = document.getElementById('end-value');
-        const startInput = document.getElementById('start-input');
-        const audio = document.getElementById('audio');
-        const btnPreview = document.getElementById('btn-preview');
+        document.addEventListener('DOMContentLoaded', function () {
+            const audio = document.getElementById('audio');
+            const btn = document.getElementById('btn-from-current');
+            const input = document.getElementById('start_sec');
 
-        function updateTimes() {
-            const start = parseFloat(slider.value);
-            const end = start + windowSec;
-            startValue.textContent = start.toFixed(2);
-            endValue.textContent = end.toFixed(2);
-            startInput.value = start.toFixed(3);
-        }
-
-        slider.addEventListener('input', updateTimes);
-        updateTimes();
-
-        btnPreview.addEventListener('click', function () {
-            const start = parseFloat(slider.value);
-            const end = start + windowSec;
-
-            audio.currentTime = start;
-            audio.play();
-
-            const duration = (end - start) * 1000;
-            setTimeout(() => {
-                if (!audio.paused) {
-                    audio.pause();
-                }
-            }, duration);
+            if (btn && audio && input) {
+                btn.addEventListener('click', function () {
+                    const t = audio.currentTime || 0;
+                    input.value = t.toFixed(2);
+                });
+            }
         });
     </script>
 </body>
