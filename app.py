@@ -23,7 +23,7 @@ from flask import (
 
 BASE_DIR = Path(__file__).resolve().parent
 
-MODEL_PATH = BASE_DIR / "modelo_cnn_big.h5"         # <-- usamos el BIG
+MODEL_PATH = BASE_DIR / "modelo_emerg_vs_ruido.h5"         # <-- usamos el BIG
 ALERT_AUDIO_DIR = BASE_DIR / "alert_audios"
 ALERT_AUDIO_DIR.mkdir(exist_ok=True)
 
