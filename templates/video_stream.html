@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Stream de Video ESP32-CAM (Flask-SocketIO)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+
+    <style>
+        body {
+            font-family: sans-serif;
+            text-align: center;
+        }
+
+        #video-feed {
+            max-width: 100%;
+            height: auto;
+            border: 2px solid #333;
+        }
+
+        #stats-panel {
+            margin: 20px auto;
+            padding: 10px;
+            border: 1px solid #ccc;
+            width: 320px;
+            text-align: left;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🎥 Stream de Video ESP32-CAM</h1>
+    <p>Conectado a Flask Server con Socket.IO</p>
+
+    <img id="video-feed" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+        alt="Video Stream" />
+
+    <div id="stats-panel">
+        <h3>Estadísticas del Stream</h3>
+        <p>FPS: <span id="fps-display">0.0</span></p>
+        <p>Clientes Conectados: <span id="clients-display">0</span></p>
+        <p>Frames Recibidos (Total): <span id="total-frames-display">0</span></p>
+        <p>Último Frame (bytes): <span id="last-frame-size">N/A</span></p>
+    </div>
+
+    <!-- IMPORTANTE: al final -->
+    <script src="{{ url_for('static', filename='js/video_client.js') }}?v=3"></script>
+
+</body>
+
+</html>

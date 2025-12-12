@@ -5,6 +5,9 @@
     <meta charset="utf-8" />
     <title>Panel de detección de sonido + GPS</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+
     <style>
         :root {
             --bg: #0f172a;
@@ -360,7 +363,6 @@
         </header>
 
         <section class="grid">
-            <!-- Estado de audio -->
             <article class="card">
                 <h2>Estado de audio</h2>
                 <p class="card-subtitle">Clasificación en ventanas de <strong>4 s</strong> usando el modelo binario
@@ -403,7 +405,6 @@
                 </div>
             </article>
 
-            <!-- Último GPS -->
             <article class="card">
                 <h2>Último GPS recibido</h2>
                 <p class="card-subtitle">Datos enviados por el dispositivo remoto.</p>
@@ -424,8 +425,30 @@
             </article>
         </section>
 
+        <section class="video-container" style="margin-bottom: 20px;">
+            <article class="card">
+                <h2 style="color: var(--accent);">Streaming de Video en Tiempo Real</h2>
+                <p class="card-subtitle">Último frame recibido por el dispositivo, transmitido por Socket.IO.</p>
+                <img id="video-feed"
+                    style="width: 100%; max-width: 800px; display: block; margin: 10px auto; border-radius: 8px; border: 1px solid var(--border);"
+                    src="/stream" alt="Stream MJPEG" />
+
+
+                <div id="stats-panel" style="margin-top: 15px; display: flex; gap: 20px; font-size: 0.9rem;">
+                    <div class="pill-small">
+                        FPS: <span id="fps-display" style="font-weight: 700; color: var(--text-main);">0.0</span>
+                    </div>
+                    <div class="pill-small">
+                        Clientes: <span id="clients-display" style="font-weight: 700; color: var(--text-main);">0</span>
+                    </div>
+                    <div class="pill-small">
+                        Frames Totales: <span id="total-frames-display"
+                            style="font-weight: 700; color: var(--text-main);">0</span>
+                    </div>
+                </div>
+            </article>
+        </section>
         <section class="grid-bottom">
-            <!-- Historial de alertas -->
             <article class="card">
                 <h2>Historial de alertas de emergencia</h2>
                 <p class="card-subtitle">Se registra cada vez que se detecta una emergencia con probabilidad superior al
@@ -436,7 +459,6 @@
                 </ul>
             </article>
 
-            <!-- Info adicional -->
             <article class="card">
                 <h2>Detalle de probabilidades</h2>
                 <p class="card-subtitle">Probabilidades actuales entregadas por el modelo.</p>
@@ -614,6 +636,8 @@
         fetchStatus();
         setInterval(fetchStatus, 2000);
     </script>
+
+    <script src="{{ url_for('static', filename='js/video_client.js') }}"></script>
 </body>
 
 </html>
